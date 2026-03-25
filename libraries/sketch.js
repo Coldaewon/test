@@ -2,23 +2,25 @@ let video;
 let bodyPose;
 let poses = [];
 
-// 프레임 조절을 위한 변수들
-let snapshotImg;       // 특정 fps마다 캡처될 이미지 버퍼
-let lastSnapshotTime = 0; // 마지막으로 캡처한 시간
+let snapshotImg;       
+let lastSnapshotTime = 0; 
+let pixelBuffer; 
 
 function preload() {
   bodyPose = ml5.bodyPose("MoveNet");
 }
 
 function setup() {
-  createCanvas(1920, 1080);
+  // 웹캠 네이티브 화질인 720p(1280x720)에 맞춰 캔버스 크기 조정
+  createCanvas(1280, 720);
   
   video = createCapture(VIDEO);
-  video.size(1920, 1080);
+  video.size(1280, 720);
   video.hide();
 
-  // 캡처용 빈 이미지 생성 (웹캠과 동일한 크기)
-  snapshotImg = createImage(1920, 1080);
+  snapshotImg = createImage(1280, 720);
+  pixelBuffer = createGraphics(1280, 720);
+  pixelBuffer.noSmooth(); 
 
   bodyPose.detectStart(video, gotPoses);
 }
@@ -28,62 +30,62 @@ function gotPoses(results) {
 }
 
 function draw() {
-  // ------------------------------------------
-  // 1. 인원 수에 따른 대역폭(Mbps) 및 목표 FPS 계산
-  // ------------------------------------------
   let numPeople = poses.length;
   let currentMbps = "";
-  let targetFps = 30; // 기본값
+  let resName = ""; // 화면에 띄울 해상도 이름 (720p 등)
+  
+  let targetFps = 30;  
+  let targetRes = 1.0; // 720p를 기준(1.0)으로 한 스케일 비율
 
+  // ------------------------------------------
+  // 인원 수에 따른 대역폭, 프레임, 유튜브식 화질(p) 동시 계산
+  // ------------------------------------------
   if (numPeople === 1) {
-    currentMbps = "20Mbps"; targetFps = 30;
+    currentMbps = "20Mbps"; targetFps = 30; targetRes = 1.0; resName = "720p";
   } else if (numPeople === 2) {
-    currentMbps = "5Mbps";  targetFps = 12;
+    currentMbps = "5Mbps";  targetFps = 12; targetRes = 480/720; resName = "480p";
   } else if (numPeople === 3) {
-    currentMbps = "1.1Mbps"; targetFps = 6;
+    currentMbps = "1.1Mbps"; targetFps = 6; targetRes = 360/720; resName = "360p";
   } else if (numPeople === 4) {
-    currentMbps = "0.5Mbps"; targetFps = 3;
+    currentMbps = "0.5Mbps"; targetFps = 3; targetRes = 240/720; resName = "240p";
   } else if (numPeople === 5) {
-    currentMbps = "0.1Mbps"; targetFps = 1;
+    currentMbps = "0.1Mbps"; targetFps = 1; targetRes = 144/720; resName = "144p";
   } else if (numPeople >= 6) {
-    currentMbps = "0.0Mbps"; targetFps = 0; // 정지 상태
+    currentMbps = "0.0Mbps"; targetFps = 0; targetRes = 144/720; resName = "144p (Stop)";
   } else {
-    currentMbps = "Signal Lost"; targetFps = 30; 
+    currentMbps = "Signal Lost"; targetFps = 30; targetRes = 1.0; resName = "";
   }
 
   // ------------------------------------------
-  // 2. 타이머를 이용한 '블롭 내부용' 지연 프레임 캡처
+  // 타이머를 이용한 '블롭 내부용' 지연 프레임 캡처
   // ------------------------------------------
   if (targetFps > 0) {
-    let interval = 1000 / targetFps; // fps를 밀리초(ms) 간격으로 변환
+    let interval = 1000 / targetFps; 
     if (millis() - lastSnapshotTime > interval) {
-      // 지정된 간격이 지났을 때만 비디오 프레임을 복사해둠
-      snapshotImg.copy(video, 0, 0, 1920, 1080, 0, 0, 1920, 1080);
+      snapshotImg.copy(video, 0, 0, 1280, 720, 0, 0, 1280, 720);
       lastSnapshotTime = millis();
     }
   } 
-  // targetFps가 0일 때(6명 이상)는 캡처를 멈추므로 이미지가 정지됨
 
-  // ------------------------------------------
-  // 3. 화면 렌더링 시작 (배경 -> 지연된 블롭 내부 -> UI)
-  // ------------------------------------------
-  
-  // A. 실시간 배경 비디오 그리기 (항상 30fps로 부드러움)
+  // 배경 렌더링
   image(video, 0, 0, width, height);
 
-  // B. 전체 화면 글로벌 상태 표시 UI
+  // 화면 좌측 상단 글로벌 UI
   push();
   translate(width, 0);
   scale(-1, 1);
   fill(255);       
   noStroke();
-  textSize(64);    
+  textSize(48); // 캔버스가 720p로 작아졌으므로 텍스트 크기도 살짝 줄임
   textStyle(BOLD);
   textAlign(LEFT, TOP);
-  text(currentMbps, 50, 50); 
+  // 전체 화면 UI에는 Mbps와 화질(p)을 같이 보여줌
+  text(`${currentMbps} [${resName}]`, 40, 40); 
   pop();
 
-  // C. 개별 블롭 데이터 처리
+  // ------------------------------------------
+  // 개별 블롭 데이터 렌더링
+  // ------------------------------------------
   for (let i = 0; i < poses.length; i++) {
     let pose = poses[i];
     
@@ -103,42 +105,56 @@ function draw() {
     }
 
     if (validPoints > 0) {
-      let padding = 50;
-      let headPadding = 120;
+      let padding = 40;     // 720p 비율에 맞춰 패딩값 소폭 조정
+      let headPadding = 90;
 
       let boxX = minX - padding;
       let boxY = minY - headPadding; 
       let boxW = (maxX - minX) + (padding * 2);
       let boxH = (maxY - minY) + padding + headPadding;
 
-      // 박스 좌표가 화면 밖으로 나가는 것을 방지 (에러 방지용)
       let cx = constrain(boxX, 0, width);
       let cy = constrain(boxY, 0, height);
       let cw = constrain(boxW, 0, width - cx);
       let ch = constrain(boxH, 0, height - cy);
 
-      // --- [핵심] 블롭 안쪽 영역에만 딜레이된 캡처 화면 덮어씌우기 ---
-      // image(소스이미지, 캔버스X, 캔버스Y, 캔버스W, 캔버스H, 소스X, 소스Y, 소스W, 소스H)
       if (cw > 0 && ch > 0) {
-        image(snapshotImg, cx, cy, cw, ch, cx, cy, cw, ch);
+        // --- 화질 열화(Pixelation) 적용 파트 ---
+        if (targetRes < 1.0) {
+          // 목표 해상도(480p, 360p 등) 비율에 맞춰 박스를 작게 압축
+          let smallW = max(1, floor(cw * targetRes));
+          let smallH = max(1, floor(ch * targetRes));
+
+          pixelBuffer.clear();
+          pixelBuffer.image(snapshotImg, 0, 0, smallW, smallH, cx, cy, cw, ch);
+
+          push();
+          noSmooth(); 
+          // 작게 압축된 이미지를 다시 원래 박스 크기로 늘려 픽셀을 깨뜨림
+          image(pixelBuffer, cx, cy, cw, ch, 0, 0, smallW, smallH);
+          pop();
+        } else {
+          image(snapshotImg, cx, cy, cw, ch, cx, cy, cw, ch);
+        }
       }
 
-      // 블롭 박스 테두리 그리기
+      // 블롭 테두리 그리기
       noFill();             
       stroke(255, 0, 0);    
-      strokeWeight(6);      
-      rect(boxX, boxY, boxW, boxH, 30); 
+      strokeWeight(5);      
+      rect(boxX, boxY, boxW, boxH, 20); 
 
-      // 개별 블롭데이터 왼쪽 상단 텍스트 그리기
+      // 개별 블롭 좌측 상단 텍스트
       push();
       translate(boxX + boxW, boxY - 15);
       scale(-1, 1);
       fill(255, 0, 0);   
       noStroke();
-      textSize(32);      
+      textSize(24); // 텍스트 크기 조정
       textStyle(NORMAL);
       textAlign(LEFT, BOTTOM);
-      text(currentMbps + " (" + targetFps + "fps)", 0, 0); // fps 수치도 확인용으로 함께 띄움
+      // 블롭 위에는 직관적으로 해상도 이름(예: 480p)과 fps를 출력
+      text(`${resName} (${targetFps}fps)`, 0, 0); 
       pop();
     }
   }
