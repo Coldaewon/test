@@ -11,7 +11,6 @@ function preload() {
 }
 
 function setup() {
-  // 웹캠 네이티브 화질인 720p(1280x720)에 맞춰 캔버스 크기 조정
   createCanvas(1280, 720);
   
   video = createCapture(VIDEO);
@@ -31,15 +30,13 @@ function gotPoses(results) {
 
 function draw() {
   let numPeople = poses.length;
-  let currentMbps = "";
-  let resName = ""; // 화면에 띄울 해상도 이름 (720p 등)
   
+  // 개별 블롭에 적용될 변수들
+  let currentMbps = "";
+  let resName = ""; 
   let targetFps = 30;  
-  let targetRes = 1.0; // 720p를 기준(1.0)으로 한 스케일 비율
+  let targetRes = 1.0; 
 
-  // ------------------------------------------
-  // 인원 수에 따른 대역폭, 프레임, 유튜브식 화질(p) 동시 계산
-  // ------------------------------------------
   if (numPeople === 1) {
     currentMbps = "20Mbps"; targetFps = 30; targetRes = 1.0; resName = "720p";
   } else if (numPeople === 2) {
@@ -56,9 +53,6 @@ function draw() {
     currentMbps = "Signal Lost"; targetFps = 30; targetRes = 1.0; resName = "";
   }
 
-  // ------------------------------------------
-  // 타이머를 이용한 '블롭 내부용' 지연 프레임 캡처
-  // ------------------------------------------
   if (targetFps > 0) {
     let interval = 1000 / targetFps; 
     if (millis() - lastSnapshotTime > interval) {
@@ -70,17 +64,19 @@ function draw() {
   // 배경 렌더링
   image(video, 0, 0, width, height);
 
-  // 화면 좌측 상단 글로벌 UI
+  // ------------------------------------------
+  // 화면 좌측 상단 글로벌 UI (20Mbps 고정)
+  // ------------------------------------------
   push();
   translate(width, 0);
   scale(-1, 1);
   fill(255);       
   noStroke();
-  textSize(48); // 캔버스가 720p로 작아졌으므로 텍스트 크기도 살짝 줄임
+  textSize(48); 
   textStyle(BOLD);
   textAlign(LEFT, TOP);
-  // 전체 화면 UI에는 Mbps와 화질(p)을 같이 보여줌
-  text(`${currentMbps} [${resName}]`, 40, 40); 
+  // 어떤 상황이든 전체 대역폭은 20Mbps로 고정 표시
+  text('20Mbps', 40, 40); 
   pop();
 
   // ------------------------------------------
@@ -105,7 +101,7 @@ function draw() {
     }
 
     if (validPoints > 0) {
-      let padding = 40;     // 720p 비율에 맞춰 패딩값 소폭 조정
+      let padding = 40;     
       let headPadding = 90;
 
       let boxX = minX - padding;
@@ -119,9 +115,7 @@ function draw() {
       let ch = constrain(boxH, 0, height - cy);
 
       if (cw > 0 && ch > 0) {
-        // --- 화질 열화(Pixelation) 적용 파트 ---
         if (targetRes < 1.0) {
-          // 목표 해상도(480p, 360p 등) 비율에 맞춰 박스를 작게 압축
           let smallW = max(1, floor(cw * targetRes));
           let smallH = max(1, floor(ch * targetRes));
 
@@ -130,7 +124,6 @@ function draw() {
 
           push();
           noSmooth(); 
-          // 작게 압축된 이미지를 다시 원래 박스 크기로 늘려 픽셀을 깨뜨림
           image(pixelBuffer, cx, cy, cw, ch, 0, 0, smallW, smallH);
           pop();
         } else {
@@ -138,22 +131,20 @@ function draw() {
         }
       }
 
-      // 블롭 테두리 그리기
       noFill();             
       stroke(255, 0, 0);    
       strokeWeight(5);      
       rect(boxX, boxY, boxW, boxH, 20); 
 
-      // 개별 블롭 좌측 상단 텍스트
+      // 개별 블롭 좌측 상단 텍스트 (다이나믹하게 변함)
       push();
       translate(boxX + boxW, boxY - 15);
       scale(-1, 1);
       fill(255, 0, 0);   
       noStroke();
-      textSize(24); // 텍스트 크기 조정
+      textSize(24); 
       textStyle(NORMAL);
       textAlign(LEFT, BOTTOM);
-      // 블롭 위에는 직관적으로 해상도 이름(예: 480p)과 fps를 출력
       text(`${resName} (${targetFps}fps)`, 0, 0); 
       pop();
     }
